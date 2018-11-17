@@ -61,7 +61,7 @@ class ADP_agent(object):
         action_var= tf.get_collection(tf.GraphKeys.TRAINABLE_VARIABLES, scope='action_network')
         init = tf.initialize_all_variables()
         with tf.Session() as sess:
-            sess.run(init)
+            sess.run(int)
             var=sess.run(action_var)
             print(var)
 
