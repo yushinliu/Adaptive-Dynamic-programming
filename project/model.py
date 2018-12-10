@@ -4,19 +4,22 @@ import os
 import gym
 
 
-class ADP_agent(object):
-    def __init__(self,w_initializer=tf.contrib.layers.xavier_initializer(),b_initializer=tf.zeros_initializer(),U_c=0,gamma=1):
-        self.U_c=U_c
+MAX_RUN=100
+
+"""
+Goal network
+"""
+class goal_network(object):
+    def __init__(self,sess,w_initializer=tf.contrib.layers.xavier_initializer(),b_initializer=tf.zeros_initializer()):
+        self.sess=sess
         self.w_initializer=w_initializer
         self.b_initializer=b_initializer
         self.x=tf.placeholder(tf.float32,[1,4],name="input_x")
-        self.gamma=gamma
-    def goal_init(self):
-        
+        self.learning_rate=0.1
         # implement goal network
-        a_last=tf.placeholder(tf.float32,[1,1],name="action_t-1")
-        self.g_input=tf.concat([self.x,a_last],axis=1)
-        with tf.variable_scope("goal_network"):
+        self.g_input=tf.concat([self.x,self.a_now],axis=1)
+        with tf.variable_scope("goal_net"):
+            """
             weights_1= tf.get_variable("gn_01_w",[5,5],initializer=self.w_initializer) #dimensions : [input layer, hidden_layer]
             bias_1 = tf.get_variable("gn_01_b",[5],initializer=self.b_initializer)#dimensions : [hidden_layer]
             tensor=tf.add(tf.matmul(self.g_input,weights_1),bias_1)
@@ -25,99 +28,178 @@ class ADP_agent(object):
             bias_2 = tf.get_variable("gn_02_b",[1],initializer=self.b_initializer)#dimensions : [output_layer]
             tensor=tf.add(tf.matmul(tensor,weights_2),bias_2)
             self.s_now=tf.nn.sigmoid(tensor)
-            #self.loss_goal=0.5*tf.squared_difference(self.V_now,self.U_c) # The value here is it the value from last time?
+            """
+            hiden= tf.layers.dense(x, 5, kernel_initializer=self.w_initializer, bias_initializer=self.b_initializer,name="l1",activation=tf.nn.relu, trainable=trainable)
+            self.s=tf.layers.dense(x, 1, kernel_initializer=self.w_initializer, bias_initializer=self.b_initializer,name="l2",activation=tf.nn.sigmoid, trainable=trainable)
         print("goal network init finish")
+        #self.a_now=tf.nn.sigmoid(tensor)
+        #self.loss_goal=0.5*tf.squared_difference(self.gamma*self.J_now,(self.J_last-self.reward))
+        #self.gradient_goal=tf.gradients(self.loss_goal,[weights_1,bias_1,weights_2,bias_2])
+        #self.gradient_action=tf.gradients(self.loss_action,[weights_1,bias_1,weights_2,bias_2])
+    def update_gradient(self,pass_gradients)
+        self.goal_params = tf.get_collection(tf.GraphKeys.GLOBAL_VARIABLES, scope='goal_net')
+        self.goal_grads = tf.gradients(ys=self.u, xs=self.action_params, grad_ys= pass_gradients)
+        opt = tf.train.AdamOptimizer(self.learning_rate)  # (- learning rate) for ascent policy
+        self.train_op = opt.apply_gradients(zip(self.goal_grads, self.goal_params))
+    def train(self,action,x):
+        input=np.concatenate((x,action),axis=0)
+        _,signal=self.sess.run([self.train_op,self.s],feed_dict={self.x:input)
+        return signal
 
-    def critic_init(self):
-        # implement critic network
-        c_input=tf.concat([self.g_input,self.s_now],axis=1)
-        with tf.variable_scope("critic_network"):
-            weights_1= tf.get_variable("cn_01_w",[6,5],initializer=self.w_initializer)
-            bias_1 = tf.get_variable("cn_01_b",[5],initializer=self.b_initializer)
-            tensor=tf.add(tf.matmul(c_input,weights_1),bias_1)
-            tensor=tf.nn.relu(tensor) #dont know, assume it is relu
-            weights_2= tf.get_variable("cn_02_w",[5,1],initializer=self.w_initializer)
-            bias_2 = tf.get_variable("cn_02_b",[1],initializer=self.b_initializer)
-            tensor=tf.add(tf.matmul(tensor,weights_2),bias_2)
-            self.V_now=tf.nn.sigmoid(tensor)
-            V_last=tf.placeholder(tf.float32,[1,1],name="V_t-1")
-            S_last=tf.placeholder(tf.float32,[1,1],name="S_t-1")
-            #self.loss_critic=0.5*tf.squared_difference(gamma*V_now,(V_last-S_last))
-        print("critic network init finish")
-    def action_init(self):
-        #  implement action network
-        with tf.variable_scope("action_network"):
-            weights_1= tf.get_variable("an_01_w",[4,5],initializer=self.w_initializer)
-            bias_1 = tf.get_variable("an_01_b",[5],initializer=self.b_initializer)
-            tensor=tf.add(tf.matmul(self.x,weights_1),bias_1)
-            tensor=tf.nn.relu(tensor) #dont know, assume it is relu
-            weights_2= tf.get_variable("an_02_w",[5,1],initializer=self.w_initializer)
-            bias_2 = tf.get_variable("an_02_b",[1],initializer=self.b_initializer)
-            tensor=tf.add(tf.matmul(tensor,weights_2),bias_2)
-            a_now=tf.nn.sigmoid(tensor)
-            #self.loss_action=0.5*tf.squared_difference(V,self.U_c)
-        print("action network init finish")
     def test(self):
-        action_var= tf.get_collection(tf.GraphKeys.TRAINABLE_VARIABLES, scope='action_network')
+        #for var in tf.trainable_variables():
+         #   print(var.name)
+        optimizer= tf.train.AdamOptimizer(learning_rate=learning_rate) 
+        action_var= tf.get_collection(tf.GraphKeys.TRAINABLE_VARIABLES, scope='goal_net')
         init = tf.initialize_all_variables()
         with tf.Session() as sess:
             sess.run(init)
             var=sess.run(action_var)
-            print(var)
-
+            #print(var)
 
 """
-    def run(self,T_a=,T_c=,T_g=,max_run=,N_a,N_c,N_g):
-		optimizer_goal= tf.train.AdamOptimizer(learning_rate=learning_rate) 
-        optimizer_action= tf.train.AdamOptimizer(learning_rate=learning_rate) 
-        optimizer_critic= tf.train.AdamOptimizer(learning_rate=learning_rate) 
-        opt_goal = optimizer.minimize(loss_goal)
-        opt_action = optimizer.minimize(loss_action)
-        opt_critic = optimizer.minimize(loss_critic)
+Critic network
+"""
+class critic_network(object):
+    def __init__(self,sess,w_initializer=tf.contrib.layers.xavier_initializer(),b_initializer=tf.zeros_initializer(),U_c=0,gamma=1):
+        self.sess=sess
+        self.U_c=U_c
+        self.J_now=tf.placeholder(tf.float32,[1,1],name="J_now")
+        self.J_last=tf.placeholder(tf.float32,[1,1],name="V_last")
+        self.reward=tf.placeholder(tf.float32,[1,1],name="reward_t")
+        self.s_now=tf.placeholder(tf.float32,[1,1],name="s_now")
+        self.a_now=tf.placeholder(tf.float32,[1,1],name="a_now")
+        self.a_last=tf.placeholder(tf.float32,[1,1],name="a_last")
+        self.w_initializer=w_initializer
+        self.b_initializer=b_initializer
+        self.x=tf.placeholder(tf.float32,[1,4],name="input_x")
+        self.learning_rate=0.1
+        self.gamma=gamma
+        # implement goal network
+        self.g_input=tf.concat([self.x,self.a_now],axis=1)
+        with tf.variable_scope("critic_net"):
+            """
+            weights_1= tf.get_variable("gn_01_w",[5,5],initializer=self.w_initializer) #dimensions : [input layer, hidden_layer]
+            bias_1 = tf.get_variable("gn_01_b",[5],initializer=self.b_initializer)#dimensions : [hidden_layer]
+            tensor=tf.add(tf.matmul(self.g_input,weights_1),bias_1)
+            tensor=tf.nn.relu(tensor) #dont know, assume it is relu
+            weights_2= tf.get_variable("gn_02_w",[5,1],initializer=self.w_initializer)#dimensions : [hidden_layer,output_layer]
+            bias_2 = tf.get_variable("gn_02_b",[1],initializer=self.b_initializer)#dimensions : [output_layer]
+            tensor=tf.add(tf.matmul(tensor,weights_2),bias_2)
+            self.s_now=tf.nn.sigmoid(tensor)
+            """
+            hiden= tf.layers.dense(x, 5, kernel_initializer=self.w_initializer, bias_initializer=self.b_initializer,name="l1",activation=tf.nn.relu, trainable=trainable)
+            self.J_now=tf.layers.dense(x, 1, kernel_initializer=self.w_initializer, bias_initializer=self.b_initializer,name="l2",activation=tf.nn.sigmoid, trainable=trainable)
+            self.critic_params = tf.get_collection(tf.GraphKeys.GLOBAL_VARIABLES, scope='scritic_net')
+            self.critic_grads = tf.gradients(ys=self.s, xs=self.goal_params)
+        print("critic network init finish")
+        #self.a_now=tf.nn.sigmoid(tensor)
+        #self.loss_goal=0.5*tf.squared_difference(self.gamma*self.J_now,(self.J_last-self.reward))
+        #self.gradient_goal=tf.gradients(self.loss_goal,[weights_1,bias_1,weights_2,bias_2])
+        #self.gradient_action=tf.gradients(self.loss_action,[weights_1,bias_1,weights_2,bias_2])
+    def train(self,J_last,reward,action,u,x):
+        input=np.concatenate((u,x),axis=0)
+        input=np.concatenate((input,action),axis=0)
+        self.loss=tf.reduced_mean(0.5*tf.squared_difference(self.gamma*self.J_now,(J_last-reward)))
+        opt = tf.train.AdamOptimizer(self.learning_rate)  # (- learning rate) for ascent policy
+        self.train_op = opt.minimize(self.loss)
+        _,J_now=self.sess.run([self.train_op,J_now],feed_dict=)
+        return J_now
+
+    def test(self):
+        #for var in tf.trainable_variables():
+         #   print(var.name)
+        optimizer= tf.train.AdamOptimizer(learning_rate=learning_rate) 
+        critic_var= tf.get_collection(tf.GraphKeys.TRAINABLE_VARIABLES, scope='critic_net')
         init = tf.initialize_all_variables()
         with tf.Session() as sess:
-        ob_lst,reward_lst,done_lst,reward_s_lst=[],[],[],[]
-            for i in range(max_run):
-                sess.run(init)
-                observation, reward, done, info = env.step(action)
-                # implement goal network
-                loss_goal=sess.run(loss_goal,feed_dict={})
-                while (loss_goal > T_g) and (i < N):
-                    _,s_now=sess.run([opt_goal,s_now],feed_dict={})
-                    reward_s_lst.append(s_now)
-                while (loss_goal > T_g) and (i < N):
-                    _,s_now=sess.run([opt_goal,s_now],feed_dict={})
-                    reward_s_lst.append(s_now)
-                while (loss_goal > T_g) and (i < N):
-                    _,s_now=sess.run([opt_goal,s_now],feed_dict={})
-                    reward_s_lst.append(s_now)
+            sess.run(init)
+
+            var=sess.run(action_var)
+            #print(var)
 
 """
+Action network
+"""
+class action_network(object):
+    def __init__(self,sess,w_initializer=tf.contrib.layers.xavier_initializer(),b_initializer=tf.zeros_initializer(),U_c=0,gamma=1):
+        self.sess=sess
+        self.w_initializer=w_initializer
+        self.b_initializer=b_initializer
+        self.x=tf.placeholder(tf.float32,[1,4],name="input_x")
+        self.learning_rate=0.1
+        # implement goal network
+        self.g_input=tf.concat([self.x,self.a_now],axis=1)
+        with tf.variable_scope("action_net"):
+            """
+            weights_1= tf.get_variable("gn_01_w",[5,5],initializer=self.w_initializer) #dimensions : [input layer, hidden_layer]
+            bias_1 = tf.get_variable("gn_01_b",[5],initializer=self.b_initializer)#dimensions : [hidden_layer]
+            tensor=tf.add(tf.matmul(self.g_input,weights_1),bias_1)
+            tensor=tf.nn.relu(tensor) #dont know, assume it is relu
+            weights_2= tf.get_variable("gn_02_w",[5,1],initializer=self.w_initializer)#dimensions : [hidden_layer,output_layer]
+            bias_2 = tf.get_variable("gn_02_b",[1],initializer=self.b_initializer)#dimensions : [output_layer]
+            tensor=tf.add(tf.matmul(tensor,weights_2),bias_2)
+            self.s_now=tf.nn.sigmoid(tensor)
+            """
+            hiden= tf.layers.dense(x, 5, kernel_initializer=self.w_initializer, bias_initializer=self.b_initializer,name="l1",activation=tf.nn.relu, trainable=trainable)
+            self.u=tf.layers.dense(x, 1, kernel_initializer=self.w_initializer, bias_initializer=self.b_initializer,name="l2",activation=tf.nn.sigmoid, trainable=trainable)
+        print("goal network init finish")
+        #self.a_now=tf.nn.sigmoid(tensor)
+        #self.loss_goal=0.5*tf.squared_difference(self.gamma*self.J_now,(self.J_last-self.reward))
+        #self.gradient_goal=tf.gradients(self.loss_goal,[weights_1,bias_1,weights_2,bias_2])
+        #self.gradient_action=tf.gradients(self.loss_action,[weights_1,bias_1,weights_2,bias_2])
+    def update_gradient(self,pass_gradients)
+        self.action_params = tf.get_collection(tf.GraphKeys.GLOBAL_VARIABLES, scope='action_net')
+        self.action_grads = tf.gradients(ys=self.u, xs=self.action_params, grad_ys= pass_gradients)
+        opt = tf.train.AdamOptimizer(self.learning_rate)  # (- learning rate) for ascent policy
+        self.train_op = opt.apply_gradients(zip(self.action_grads, self.action_params))
+    def train(self,x):
+        input=x
+        self.action_params = tf.get_collection(tf.GraphKeys.GLOBAL_VARIABLES, scope='action_net')
+        self.action_grads = tf.gradients(ys=self.u, xs=self.action_params, grad_ys= pass_gradients)
+        opt = tf.train.AdamOptimizer(self.learning_rate)  # (- learning rate) for ascent policy
+        self.train_op = opt.apply_gradients(zip(self.action_grads, self.action_params))
+        _,u=self.sess.run([self.train_op,self.u],feed_dict={self.x:input)
+        return u
 
-
-
-
+    def test(self):
+        #for var in tf.trainable_variables():
+         #   print(var.name)
+        optimizer= tf.train.AdamOptimizer(learning_rate=learning_rate) 
+        action_var= tf.get_collection(tf.GraphKeys.TRAINABLE_VARIABLES, scope='goal_network')
+        init = tf.initialize_all_variables()
+        with tf.Session() as sess:
+            sess.run(init)
+            var=sess.run(action_var)
+            #print(var)
 
 
 if __name__ == "__main__":
-    agent=ADP_agent()
-    agent.goal_init()
-    agent.critic_init()
-    agent.action_init()
-    agent.test()
-    """
     env = gym.make('CartPole-v0')
 
-    env.reset()
-    while random_episodes < 10:
+    env.reset();
+    random_episodes = 0
+    reward_sum = 0
+    while random_episodes < 1:
         env.render()
-        observation, reward, done, _ = env.step(np.random.randint(0,2))
+        observation, reward, done, action = env.step(np.random.randint(0,2))
         reward_sum += reward
         if done:
             random_episodes += 1
             print("Reward for this episode was:",reward_sum)
             reward_sum = 0
             env.reset()
-    adp = ADP()
-    adp.run()
-    """
+    
+
+    #initialize all the parameters
+    sess=tf.Session()
+    goal=goal_network(sess)
+    critic=critic_network(sess)
+    action=action_network(sess)
+    goal.update_gradients(critic.critic_grads)
+    action.update_gradients(critic.critic_grads)
+    sess.run(tf.initialize_all_variables())
+    
+	
+	for epoch in range(MAX_RUN):
+		while
