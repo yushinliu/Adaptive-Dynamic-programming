@@ -7,8 +7,8 @@ import gym
 GAMMA=1
 U_C=0
 MAX_RUN=100
-N_g,N_c,N_a=10,10,10
-e_g,e_c,e_a=-0.001,0.001,0.001
+N_g,N_c,N_a=2,2,2
+e_g,e_c,e_a=-1,0,0
 
 """
 Goal network
@@ -35,7 +35,7 @@ class goal_network(object):
             self.s=tf.layers.dense(hidden, 1, kernel_initializer=self.w_initializer, bias_initializer=self.b_initializer,name="l2",activation=tf.nn.sigmoid)
         print("goal network init finish")
     def cal_loss(self,J_now,J_last,reward,gamma=GAMMA):
-        loss=np.mean(0.5*(gamma*J_now-(J_last-reward)**2))
+        loss=np.mean(0.5*(gamma*J_now-(J_last-reward))**2)
         return loss
     def update_gradient(self,pass_gradients):
         self.goal_params = tf.get_collection(tf.GraphKeys.GLOBAL_VARIABLES, scope='goal_net')
@@ -147,7 +147,7 @@ if __name__ == "__main__":
     env.reset();
     random_episodes = 0
     reward_sum = 0
-    while random_episodes < 10:
+    while random_episodes < 1:
         env.render()
         observation, reward, done, action = env.step(np.random.randint(0,2))
         reward_sum += reward
@@ -159,8 +159,6 @@ if __name__ == "__main__":
 
 
     action_lst,signal_lst,value_lst=[],[],[0,0]
-    loss_goal,loss_critic,loss_action=1,1,1
-    cyc_g,cyc_c,cyc_a=0,0,0
     #set up input tensor
     with tf.variable_scope("Input"):
         observ=tf.placeholder(tf.float32,[1,4],name="observ")
@@ -174,19 +172,21 @@ if __name__ == "__main__":
     action_net.update_gradient(critic_net.c2a_grads)
     sess.run(tf.global_variables_initializer())
 
-    #initialize the input observation and action
-    observation=observation.reshape(1,4)
+    #start training
     action = np.array(env.action_space.sample()).reshape(1,1)
     epoch=0
     done=0
     while epoch < MAX_RUN:
+        cyc_g, cyc_c, cyc_a = 0, 0, 0
+        loss_goal, loss_critic, loss_action = 1, 1, 1
+        observation=observation.reshape(1, 4)
+        action = np.array(action).reshape(1, 1)
         #tuning the goal network
         while  cyc_g < N_g and loss_goal > e_g:
             signal=goal_net.train(action,observation)
-            loss_goal=goal_net.cal_loss(value_lst[-1],value_lst[-2],np.int(done)) #according to paper A three-network architecture for on-line learning and optimization
-
+            loss_goal=goal_net.cal_loss(value_lst[-1],value_lst[-2],np.int(done))
             cyc_g+=1
-            print("goal ",loss_goal)
+        #print("goal ",loss_goal)
 #        signal_lst.append(signal)
         #tuning the critic network
         value_tmp_lst=[]
@@ -196,19 +196,18 @@ if __name__ == "__main__":
             value_now,loss_critic=critic_net.train(value_last,action,signal,observation)
             value_tmp_lst.append(value_now)
             cyc_c+=1
-            print("critic ",loss_critic)
+        #print("critic ",loss_critic)
         value_lst.append(value_now)
         #tuning the action network
         while cyc_a < N_a and loss_action > e_a:
             action=action_net.train(observation,action)
             loss_action=action_net.cal_loss(value_lst[-1])
             cyc_a+=1
-            print("action ",loss_action)
+        #print("action: ",loss_action)
         action=np.int(np.round(action)[0][0])
-        #env.render()
+        env.render()
         observation, reward, done, info = env.step(action)
         if done:
             env.reset()
             epoch+=1
-        print("Epoch :",epoch)#," action :",action," observation :",observation," done :",done)
-        action = np.array(action).reshape(1, 1)
+        print("Epoch :",epoch," action :",action," observation :",observation," done :",done)
